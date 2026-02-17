@@ -1718,6 +1718,27 @@ server <- function(input, output, session) {
     pd_std  <- tryCatch(standardize_pd(pd_raw),
                         error = function(e){ showNotification(paste("입원일수 표준화 오류:", e$message), "error"); NULL })
     if (is.null(abx_std) || is.null(pd_std)) return(NULL)
+
+# Shinylive/webR 환경에서 list로 들어오는 경우를 방어
+abx_std <- if (inherits(abx_std, "data.frame")) {
+  tibble::as_tibble(abx_std)
+} else if (is.list(abx_std) && length(abx_std) == 1 && inherits(abx_std[[1]], "data.frame")) {
+  tibble::as_tibble(abx_std[[1]])
+} else {
+  tibble::as_tibble(abx_std)
+}
+
+pd_std <- if (inherits(pd_std, "data.frame")) {
+  tibble::as_tibble(pd_std)
+} else if (is.list(pd_std) && length(pd_std) == 1 && inherits(pd_std[[1]], "data.frame")) {
+  tibble::as_tibble(pd_std[[1]])
+} else {
+  tibble::as_tibble(pd_std)
+}
+if (!"month" %in% names(pd_std)) pd_std$month <- character()
+if (!"patient_days" %in% names(pd_std)) pd_std$patient_days <- numeric()
+pd_std$month <- as.character(pd_std$month)
+pd_std$patient_days <- suppressWarnings(as.numeric(pd_std$patient_days))
     
     # 추가 컬럼: class / age / 키(MDRP_NO, PTNO)
     col_class <- pick_col(abx_raw, c("class","계열","계열분류","drug_class","계열코드"))
@@ -1787,6 +1808,7 @@ server <- function(input, output, session) {
     }
     
     if (!is.null(age_map)) {
+      age_map <- tibble::as_tibble(age_map)
       # ABX에 age가 있더라도 NA가 많을 수 있으니 coalesce로 보완
       abx_std <- abx_std %>%
         dplyr::left_join(age_map, by = c("MDRP_NO","PTNO")) %>%
