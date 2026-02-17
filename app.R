@@ -2527,18 +2527,39 @@ server <- function(input, output, session) {
   
   # ---- [PATCH D] 필드 누락 시에도 동작하는 계산기 ----
   s2_calc_std <- function(abx_df, pd_df) {
-    if (is.null(abx_df) || !nrow(abx_df)) {
-      return(tibble(
-        month = character(), class = character(), atc_code = character(),
-        ingredient = character(), form = character(), route = character(),
-        DOT_cnt = numeric(), DDD_sum = numeric(),
-        patient_days = numeric(), DOT_1000PD = numeric(), DDD_1000PD = numeric()
-      ))
+    empty_std <- tibble(
+      month = character(), class = character(), atc_code = character(),
+      ingredient = character(), form = character(), route = character(),
+      DOT_cnt = numeric(), DDD_sum = numeric(),
+      patient_days = numeric(), DOT_1000PD = numeric(), DDD_1000PD = numeric()
+    )
+
+    if (is.null(abx_df)) return(empty_std)
+
+    df <- if (inherits(abx_df, "data.frame")) {
+      tibble::as_tibble(abx_df)
+    } else if (is.list(abx_df) && length(abx_df) == 1 && inherits(abx_df[[1]], "data.frame")) {
+      tibble::as_tibble(abx_df[[1]])
+    } else {
+      tibble::tibble()
     }
-    
-    df <- abx_df
-    
-    # ── 필수 컬럼 보장 (형까지 맞춰 생성: date=Date, 나머지=character) ─────────────────
+    if (!nrow(df)) return(empty_std)
+
+    pd_tbl <- if (inherits(pd_df, "data.frame")) {
+      tibble::as_tibble(pd_df)
+    } else if (is.list(pd_df) && length(pd_df) == 1 && inherits(pd_df[[1]], "data.frame")) {
+      tibble::as_tibble(pd_df[[1]])
+    } else {
+      tibble::tibble()
+    }
+    if (!"month" %in% names(pd_tbl)) pd_tbl$month <- character()
+    if (!"patient_days" %in% names(pd_tbl)) pd_tbl$patient_days <- numeric()
+    pd_tbl <- pd_tbl %>%
+      dplyr::mutate(
+        month = as.character(month),
+        patient_days = suppressWarnings(as.numeric(patient_days))
+      )
+
     if (!"date" %in% names(df))        df$date        <- as.Date(NA)
     if (!"patient_id" %in% names(df))  df$patient_id  <- NA_character_
     if (!"atc_code" %in% names(df))    df$atc_code    <- NA_character_
@@ -2546,17 +2567,14 @@ server <- function(input, output, session) {
     if (!"form" %in% names(df))        df$form        <- NA_character_
     if (!"route" %in% names(df))       df$route       <- NA_character_
     if (!"class" %in% names(df))       df$class       <- NA_character_
-    
-    # 월 키
+
     df$month <- to_month_key(df$date)
-    
-    # ── DOT: 같은 환자가 같은 날, 같은 (ATC/성분/제형/경로/계열) 1건으로 카운트 ─────────
+
     dot_daily <- df %>%
       dplyr::filter(!is.na(date)) %>%
       dplyr::distinct(patient_id, atc_code, ingredient, form, route, class, date, month, .keep_all = FALSE) %>%
-      dplyr::count(class, atc_code, ingredient, form, route, month, name = "DOT_cnt")   # ◀ .drop 제거
-    
-    # ── DDD: 관련 필드가 모두 있을 때만 계산, 아니면 0 ───────────────────────────
+      dplyr::count(class, atc_code, ingredient, form, route, month, name = "DOT_cnt")
+
     if (all(c("dose", "unit", "unit_g", "ddd_g") %in% names(df))) {
       df <- df %>%
         dplyr::mutate(
@@ -2566,11 +2584,11 @@ server <- function(input, output, session) {
     } else {
       df$ddd_cnt <- 0
     }
-    
+
     ddd_mon <- df %>%
       dplyr::group_by(class, atc_code, ingredient, form, route, month) %>%
       dplyr::summarise(DDD_sum = sum(ddd_cnt, na.rm = TRUE), .groups = "drop")
-    
+
     mon <- dplyr::full_join(
       ddd_mon, dot_daily,
       by = c("class", "atc_code", "ingredient", "form", "route", "month")
@@ -2579,20 +2597,17 @@ server <- function(input, output, session) {
         DDD_sum = dplyr::coalesce(DDD_sum, 0),
         DOT_cnt = dplyr::coalesce(DOT_cnt, 0)
       )
-    
+
     mon %>%
-      dplyr::left_join(pd_df, by = "month") %>%
+      dplyr::left_join(pd_tbl, by = "month") %>%
       dplyr::mutate(
         patient_days = dplyr::coalesce(patient_days, NA_real_),
         DDD_1000PD   = dplyr::if_else(!is.na(patient_days) & patient_days > 0, 1000 * DDD_sum / patient_days, NA_real_),
         DOT_1000PD   = dplyr::if_else(!is.na(patient_days) & patient_days > 0, 1000 * DOT_cnt / patient_days, NA_real_)
       )
   }
-  
-  
-  
-  # ▶ 버튼을 눌러야만 값이 갱신됨
-  s2_std_overall  <- eventReactive(input$s2_run, { d <- isolate(s2_data()); if (is.null(d)) return(tibble()); s2_calc_std(isolate(s2_abx_only_date()), d$pd) }, ignoreInit = TRUE)
+
+  s2_std_overall <- eventReactive(input$s2_run, { d <- isolate(s2_data()); if (is.null(d)) return(tibble()); s2_calc_std(isolate(s2_abx_only_date()), d$pd) }, ignoreInit = TRUE)
   s2_std_filtered <- eventReactive(input$s2_run, { d <- isolate(s2_data()); if (is.null(d)) return(tibble()); s2_calc_std(isolate(s2_abx_filtered()),  d$pd) }, ignoreInit = TRUE)
   
   s2_month_total <- function(std_df) {
