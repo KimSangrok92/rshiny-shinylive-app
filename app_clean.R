@@ -9,8 +9,6 @@ try({
     }
 }, silent = TRUE)
 
-getwd()
-
 library(shiny)
 
 library(shinydashboardPlus)
@@ -38,14 +36,14 @@ library(tidyr)
 library(bslib)
 
 suppressWarnings(try(library(showtext), silent = TRUE))
-suppressWarnings(try(library(sysfonts), silent = TRUE))
+suppressWarnings(try(library(showtextdb), silent = TRUE))
 
-options(asp_plot_family = "Noto Sans KR")
+options(asp_plot_family = "sans")
 try({
-    if (requireNamespace("showtext", quietly = TRUE) && requireNamespace("sysfonts", quietly = TRUE)) {
-        sysfonts::font_add_google("Noto Sans KR", "noto_sans_kr")
+    if (requireNamespace("showtext", quietly = TRUE) && requireNamespace("showtextdb", quietly = TRUE)) {
+        showtextdb::load_showtext_fonts()
         showtext::showtext_auto(enable = TRUE)
-        options(asp_plot_family = "noto_sans_kr")
+        options(asp_plot_family = "wqy-microhei")
     }
 }, silent = TRUE)
 
@@ -280,7 +278,7 @@ if (!exists("BAR_BLUE")) BAR_BLUE <- "#0066CC"
 GRID_GREY <- "#E6E6E6"
 
 theme_sheet3_blue <- function() {
-    ggplot2::theme_minimal(base_size = 12) + ggplot2::theme(text = ggplot2::element_text(family = getOption("asp_plot_family", "Noto Sans KR")), plot.title = ggplot2::element_text(face = "bold", size = 14, hjust = 0, color = "black"), plot.subtitle = ggplot2::element_text(color = "black"), plot.caption = ggplot2::element_text(size = 9, color = "black"), axis.title = ggplot2::element_text(size = 12, color = "black"), axis.text = ggplot2::element_text(size = 10, color = "black"), legend.title = ggplot2::element_text(color = "black"), legend.text = ggplot2::element_text(color = "black"), 
+    ggplot2::theme_minimal(base_size = 12) + ggplot2::theme(text = ggplot2::element_text(family = getOption("asp_plot_family", "sans")), plot.title = ggplot2::element_text(face = "bold", size = 14, hjust = 0, color = "black"), plot.subtitle = ggplot2::element_text(color = "black"), plot.caption = ggplot2::element_text(size = 9, color = "black"), axis.title = ggplot2::element_text(size = 12, color = "black"), axis.text = ggplot2::element_text(size = 10, color = "black"), legend.title = ggplot2::element_text(color = "black"), legend.text = ggplot2::element_text(color = "black"), 
         axis.line.x = ggplot2::element_line(color = "black", linewidth = 0.6), axis.line.y = ggplot2::element_line(color = "black", linewidth = 0.6), axis.ticks = ggplot2::element_line(color = "#444444", linewidth = 0.4), axis.ticks.length = grid::unit(3, "pt"), panel.grid.major.x = ggplot2::element_line(color = "#F0F0F0", linewidth = 0.4), panel.grid.major.y = ggplot2::element_line(color = GRID_GREY, linewidth = 0.4), panel.grid.minor = ggplot2::element_blank(), plot.margin = ggplot2::margin(6, 
             6, 6, 6), legend.position = "none")
 }
@@ -1676,36 +1674,6 @@ server <- function(input, output, session) {
         else {
             ggplot(ts, aes(x = month_date, y = DDD_1000PD, color = group)) + geom_line(linewidth = 1) + geom_point(size = 1.8) + scale_color_manual(values = cols_map, breaks = groups) + scale_x_date(breaks = breaks_pretty(6), labels = label_date("%Y-%m")) + scale_y_continuous(breaks = breaks_pretty(6), labels = label_number(accuracy = 0.1)) + labs(x = "Month (YYYY-MM)", y = "DDD", color = "계열") + theme_sheet3_blue() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
         }
-    })
-    output$s2_plot_cum_dot <- renderPlot({
-        std <- s2_std_filtered()
-        if (is.null(std) || nrow(std) == 0) 
-            return(s2_wait_plot())
-        gk <- s2_locked_group_key()
-        pick <- s2_locked_picked()
-        ts <- s2_group_ts(std, gk, pick)
-        if (is.null(ts) || nrow(ts) == 0) 
-            return(s2_wait_plot("선택 조건에 해당하는 데이터가 없습니다"))
-        cum <- s2_add_total_and_cumulate(ts, "DOT_1000PD")
-        groups <- unique(cum$group)
-        cols_map <- c(s2_group_colors(setdiff(groups, "TOTAL"), gk), TOTAL = "#222222")
-        ggplot(cum, aes(x = month_date, y = value_cum, color = group)) + geom_line(linewidth = 1) + geom_point(size = 1.8) + scale_color_manual(values = cols_map, breaks = groups) + scale_x_date(breaks = scales::breaks_pretty(6), labels = scales::label_date("%Y-%m")) + scale_y_continuous(breaks = scales::breaks_pretty(6), labels = scales::label_number(accuracy = 0.1)) + labs(x = "Month (YYYY-MM)", y = "Cumulative DOT", color = switch(gk, class = "계열", ingr = "성분명", route = "경로", total = NULL)) + 
-            theme_sheet3_blue() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
-    })
-    output$s2_plot_cum_ddd <- renderPlot({
-        std <- s2_std_filtered()
-        if (is.null(std) || nrow(std) == 0) 
-            return(s2_wait_plot())
-        gk <- s2_locked_group_key()
-        pick <- s2_locked_picked()
-        ts <- s2_group_ts(std, gk, pick)
-        if (is.null(ts) || nrow(ts) == 0) 
-            return(s2_wait_plot("선택 조건에 해당하는 데이터가 없습니다"))
-        cum <- s2_add_total_and_cumulate(ts, "DDD_1000PD")
-        groups <- unique(cum$group)
-        cols_map <- c(s2_group_colors(setdiff(groups, "TOTAL"), gk), TOTAL = "#222222")
-        ggplot(cum, aes(x = month_date, y = value_cum, color = group)) + geom_line(linewidth = 1) + geom_point(size = 1.8) + scale_color_manual(values = cols_map, breaks = groups) + scale_x_date(breaks = scales::breaks_pretty(6), labels = scales::label_date("%Y-%m")) + scale_y_continuous(breaks = scales::breaks_pretty(6), labels = scales::label_number(accuracy = 0.1)) + labs(x = "Month (YYYY-MM)", y = "Cumulative DDD", color = switch(gk, class = "계열", ingr = "성분명", route = "경로", total = NULL)) + 
-            theme_sheet3_blue() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
     })
     output$s2_plot_filtered_ingr_dot <- renderPlot({
         std <- s2_std_filtered()
