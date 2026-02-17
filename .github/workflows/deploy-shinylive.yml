@@ -1,0 +1,22 @@
+﻿name: Deploy Shinylive to Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: posit-dev/r-shinylive/.github/workflows/deploy-app.yaml@actions-v1
+    with:
+      app-dir: .
+      publish-dir: _site
